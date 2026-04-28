@@ -54,6 +54,42 @@ Stripe Payment → Convex Webhook → CoatingRecord Table
   6. Report + booking link sent via notification system
   7. Customer books recurring maintenance → new Stripe subscription → repeat
 
+## ML ↔ Convex Integration Guidelines
+To integrate the Python ML models (Prophet/scikit-learn) with the Convex/TypeScript backend, we propose the following approach:
+
+### Option 1: Microservice (Recommended for MVP)
+- Deploy the ML models as a lightweight FastAPI service.
+- The service will expose endpoints matching the API specification in `ml/API_SPEC.md`.
+- Convex actions will call this service via HTTP to get health scores and forecasts.
+- This keeps the ML code in Python and avoids complex bindings.
+
+### Option 2: Child Process (for initial testing)
+- For early testing, Convex actions can spawn a Python child process to run the ML models.
+- This is less efficient but easier to set up initially.
+- We recommend moving to Option 1 as soon as possible.
+
+### Data Exchange Format
+- Use JSON for requests and responses.
+- The ML service will accept:
+  - Coating record ID (to fetch data from Convex via a helper function or by passing necessary fields)
+  - OR directly: application date, coating product ID, zip code, and historical weather data.
+- The ML service will return:
+  - Current health score (0-100)
+  - Health grade (Excellent, Good, Fair, Poor, Critical)
+  - Maintenance flag (true if score < 65)
+  - Optional forecast and confidence intervals
+
+### Security and Performance
+- The ML service should be deployed in a secure environment (e.g., same VPC or behind API gateway).
+- Implement caching for recent health scores to reduce redundant computations.
+- Use API keys or tokens for authentication between Convex and the ML service.
+
+### File Locations
+- ML models: `ml/models/prophet_model.py` and `ml/models/sklearn_model.py`
+- Health score calculator: `ml/health_score_calculator.py`
+- API specification: `ml/API_SPEC.md`
+- Required input data: `ml/REQUIRED_INPUT_DATA.md`
+
 ## Handoff Protocols
 When completing a task, each specialist must provide:
 1. **Summary of Accomplishments**: What was built/changed
