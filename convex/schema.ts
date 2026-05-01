@@ -13,6 +13,10 @@ export default defineSchema({
     name: v.string(),
     productId: v.string(), // External product ID from manufacturer or vector store
     description: v.optional(v.string()),
+    // Additional fields for coating chemistry that affect degradation
+    uvResistance: v.optional(v.number()), // 0-1 scale, higher = more resistant
+    expectedLifespanMonths: v.optional(v.number()), // e.g., 24 for 2-year coating
+    hydrophobicRating: v.optional(v.number()), // 0-1 scale
   }),
 
   coatingRecords: defineTable({
@@ -22,6 +26,10 @@ export default defineSchema({
     applicationDate: v.number(), // Timestamp
     warrantyEndDate: v.optional(v.number()),
     zipCode: v.string(), // For weather data lookup
+    // Store current health score for quick access (updated by ML service)
+    currentHealthScore: v.optional(v.number()),
+    currentHealthGrade: v.optional(v.string()),
+    lastHealthScoreUpdate: v.optional(v.number()), // Timestamp of last update
   }),
 
   weatherData: defineTable({
@@ -33,6 +41,25 @@ export default defineSchema({
     // Index for quick lookup by zipCode and date
   }, (table) => [
     table.index("byZipCodeAndDate", ["zipCode", "date"]),
+  ]),
+
+  healthScores: defineTable({
+    coatingRecordId: v.id("coatingRecords"),
+    timestamp: v.number(), // When this score was calculated
+    healthScore: v.number(), // 0-100
+    healthGrade: v.string(), // Excellent, Good, Fair, Poor, Critical
+    degradationPrediction: v.number(), // 0-100 (inverse of healthScore)
+    needsMaintenance: v.boolean(), // True if healthScore < 65
+    // Optional: store confidence intervals from ML model
+    confidenceLower: v.optional(v.number()),
+    confidenceUpper: v.optional(v.number()),
+    // Weather data used for this calculation (for audit/traceability)
+    uvIndexUsed: v.optional(v.number()),
+    rainfallUsed: v.optional(v.number()),
+    temperatureUsed: v.optional(v.number()),
+  }, (table) => [
+    table.index("byCoatingRecord", ["coatingRecordId"]),
+    table.index("byTimestamp", ["timestamp"]),
   ]),
 
   maintenanceSchedules: defineTable({
@@ -48,4 +75,20 @@ export default defineSchema({
     stripeCustomerId: v.string(),
     stripeSubscriptionId: v.optional(v.string()),
   }),
+
+  // Store notifications sent to customers
+  notifications: defineTable({
+    coatingRecordId: v.id("coatingRecords"),
+    type: v.string(), // 'email', 'sms', 'push'
+    recipient: v.string(), // email address or phone number
+    subject: v.optional(v.string()),
+    content: v.string(),
+    sentAt: v.number(), // Timestamp
+    status: v.string(), // 'sent', 'failed', 'delivered'
+    // Reference to health score that triggered notification
+    healthScoreId: v.optional(v.id("healthScores")),
+  }, (table) => [
+    table.index("byCoatingRecord", ["coatingRecordId"]),
+    table.index("bySentAt", ["sentAt"]),
+  ]),
 });
